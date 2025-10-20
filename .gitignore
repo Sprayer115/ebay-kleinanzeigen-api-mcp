@@ -25,6 +25,15 @@ venv/
 ENV/
 env/
 .env
+.venv/
+
+# uv
+.python-version
+uv.lock
+
+# Poetry (legacy)
+poetry.lock
+.poetry/
 
 # IDE
 .idea/
@@ -32,6 +41,13 @@ env/
 *.swp
 *.swo
 .DS_Store
+
+# Personal/Generated files (contain user paths)
+claude_desktop_config.json
+claude_desktop_config.example.generated.json
+setup_output.log
+PERSONAL_*.md
+DOCKER_DEPLOYMENT.md
 
 # Playwright
 node_modules/

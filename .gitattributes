@@ -1,0 +1,39 @@
+# Git attributes for kleinanzeigen-mcp-server
+
+# Auto-detect text files and perform LF normalization
+* text=auto
+
+# Python files
+*.py text eol=lf diff=python
+
+# Shell scripts
+*.sh text eol=lf
+*.ps1 text eol=crlf
+
+# Documentation
+*.md text eol=lf
+*.txt text eol=lf
+*.rst text eol=lf
+
+# Config files
+*.json text eol=lf
+*.toml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Docker
+Dockerfile* text eol=lf
+docker-compose*.yml text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary

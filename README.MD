@@ -1,108 +1,140 @@
-# Ebay Kleinanzeigen API
+# Kleinanzeigen MCP Server
 
 <div align="center">
-  <h3 align="center">Ebay Kleinanzeigen API</h3>
+  <h3 align="center">MCP Server for eBay Kleinanzeigen</h3>
 
   <p align="center">
-    A powerful API interface for Ebay-Kleinanzeigen.de that enables you to fetch listings and specific data.
+    Connect Claude AI to eBay Kleinanzeigen - Search listings and get details through natural language.
   </p>
 
   <p align="center">
-    <b>🚀 Looking for a ready-to-use solution?</b>
+    <b>🤖 Model Context Protocol Server</b>
     <br />
-    Try it at <a href="https://kleinanzeigen-agent.de/features/developer-api"><strong>kleinanzeigen-agent.de »</strong></a>
+    ✓ Natural Language Search (German + English)
     <br />
-    ✓ Automated Search Agents
+    ✓ Detailed Listing Information
     <br />
-    ✓ Search & Detail API
+    ✓ Built for Claude Desktop
     <br />
-    <a href="https://github.com/DanielWTE/ebay-kleinanzeigen-api/issues">Report Bug</a>
-    ·
-    <a href="https://github.com/DanielWTE/ebay-kleinanzeigen-api/issues">Request Feature</a>
+    ✓ Docker & Local Installation
   </p>
 </div>
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+---
 
-## Getting Started
+> **Note:** This is a complete rewrite of the original [DanielWTE/ebay-kleinanzeigen-api](https://github.com/DanielWTE/ebay-kleinanzeigen-api) project.  
+> Original project was a FastAPI REST API. This version is a **Model Context Protocol (MCP) server** specifically designed for Claude Desktop integration.
+> 
+> **Key Changes:**
+> - ✅ MCP Protocol instead of REST API
+> - ✅ Direct Claude Desktop integration
+> - ✅ UV package manager (10-100x faster)
+> - ✅ Comprehensive test suite
+> - ✅ Docker support with MCP Toolkit
+> - ✅ German language optimization
 
-### Want to skip the setup?
-Visit [kleinanzeigen-agent.de](https://kleinanzeigen-agent.de/features/developer-api) for our hosted solution with additional features and zero configuration required.
+---
 
-### Prerequisites
-- Python 3.12 or higher
-- pip (Python package manager)
-- Playwright
+## 🚀 Quick Start
 
-### Installation
+**Choose your preferred installation method:**
 
-1. Clone the repository
-```sh
-git clone https://github.com/DanielWTE/ebay-kleinanzeigen-api.git
-cd ebay-kleinanzeigen-api
+### 🐳 Docker (Recommended for Production)
+```powershell
+# With Docker MCP Toolkit (easiest)
+# See: DOCKER_QUICKSTART.md
+
+docker build -t kleinanzeigen-mcp:latest -f Dockerfile.mcp .
+# Then follow DOCKER_QUICKSTART.md for catalog setup
 ```
 
-2. Install dependencies
-```sh
-pip install -r requirements.txt
-playwright install chromium
+### 💻 Local Installation (Recommended for Development)
+
+#### 1. Install
+```powershell
+.\setup-uv.ps1
 ```
 
-3. Start the API
-```sh
-uvicorn main:app --reload
+#### 2. Configure Claude Desktop
+Copy the generated config to: `%APPDATA%\Claude\claude_desktop_config.json`
+
+### 3. Test
+Restart Claude Desktop and try: **"Search for laptops in Berlin under 500€"**
+
+See [START_HERE.md](START_HERE.md) for detailed instructions.
+
+## 📦 What is this?
+
+An **MCP (Model Context Protocol) Server** that gives Claude AI direct access to eBay Kleinanzeigen:
+- 🔍 Search listings with filters (location, price, keywords)
+- 📄 Get complete listing details (images, seller info, specs)
+- 🤖 Works through natural language in Claude Desktop
+
+## 🛠️ Available Tools
+
+### `search_listings`
+Search with optional filters:
+- `query` - Keywords (e.g., "laptop", "fahrrad")
+- `location` - City or postal code
+- `radius` - Distance in km
+- `min_price` / `max_price` - Price range in EUR
+- `page_count` - Number of pages (1-20)
+
+### `get_listing_details`
+### `get_listing_details`
+Get complete info for a specific listing by ID.
+
+## 💡 Example Usage
+
+**User:** "Find bicycles in Munich under 300€"
+
+**Claude:** 
+1. Calls `search_listings(query="fahrrad", location="München", max_price=300)`
+2. Shows results with IDs, prices, links
+3. Can get details: `get_listing_details(listing_id="...")`
+4. Provides recommendations
+
+## 🔧 Development
+
+```powershell
+# Run server
+uv run kleinanzeigen-mcp
+
+# Run tests (unit tests only, fast)
+uv run pytest
+
+# Run ALL tests (includes slow integration tests)
+uv run pytest --run-integration
+
+# Run with verbose output
+uv run pytest -v
+
+# Debug mode
+$env:LOG_LEVEL="DEBUG"
+uv run kleinanzeigen-mcp
 ```
 
-The API will be available at `http://localhost:8000`
+## 🐳 Docker
 
-### API Endpoints
-
-#### 1. Fetch Listings
-**Endpoint:** `GET /inserate`
-
-**Description:** Retrieves a list of listings based on search criteria.
-
-##### Query Parameters:
-- **`query`** *(string, optional)*: The search term (e.g., "fahrrad" to search for bicycles).
-- **`location`** *(string, optional)*: The location or postal code to narrow the search (e.g., `10178` for Berlin).
-- **`radius`** *(integer, optional)*: The search radius in kilometers from the specified location (e.g., `5` for a 5 km radius).
-- **`min_price`** *(integer, optional)*: The minimum price in Euros for the listings (e.g., `200` for at least 200 Euros).
-- **`max_price`** *(integer, optional)*: The maximum price in Euros for the listings (e.g., `500` for at most 500 Euros).
-- **`page_count`** *(integer, optional)*: The number of pages to search or return (e.g., `5` for the first 5 pages, default is 1, max: 20 pages).
-
-##### Example Request:
-```http
-GET /inserate?query=fahrrad&location=10178&radius=5&min_price=200&page_count=5
+```powershell
+docker compose --profile stdio up -d
 ```
 
-#### 2. Fetch Listing Details
-**Endpoint:** `GET /inserat/{id}`
+## 📚 Documentation
 
-**Description:** Retrieves detailed information about a specific listing.
+- **[START_HERE.md](START_HERE.md)** - Quick setup guide
+- **MCP Protocol:** https://modelcontextprotocol.io
+- **Issues:** https://github.com/DanielWTE/ebay-kleinanzeigen-api/issues
 
-##### Path Parameters:
-- **`id`** *(string)*: The unique identifier of the listing to fetch details for.
+## 🔐 Privacy
 
-##### Example Request:
-```http
-GET /inserat/12345
-```
+- No personal data in repository
+- Config files auto-generated with your paths
+- `.gitignore` protects sensitive files
 
+---
 
-### Documentation
-
-#### API Response Format
-All API endpoints return responses in the following JSON format:
-```json
-{
-  "success": true,
-  "data": [
-    ...
-  ]
-}
-```
-
-API documentation is available at `http://localhost:8000/docs` when running locally.
+**Status:** ✅ Ready to use with Claude Desktop
 
 ## License
 Distributed under the MIT License. See `LICENSE` for more information.

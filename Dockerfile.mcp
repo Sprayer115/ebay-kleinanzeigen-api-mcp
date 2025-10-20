@@ -1,0 +1,77 @@
+# Multi-stage build for production MCP server with UV
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+# Install system dependencies for Playwright
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install UV (10-100x faster than pip/poetry)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Copy project files (README.MD wird als README.md kopiert für pyproject.toml)
+COPY pyproject.toml ./
+COPY README.MD README.md
+COPY src ./src
+
+# Install dependencies with UV
+RUN uv venv .venv && \
+    uv pip install --python .venv/bin/python -e . && \
+    uv pip install --python .venv/bin/python playwright
+
+# Install Playwright browsers
+RUN .venv/bin/python -m playwright install chromium && \
+    .venv/bin/python -m playwright install-deps chromium
+
+# Runtime stage
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install runtime dependencies for Playwright
+RUN apt-get update && apt-get install -y \
+    libglib2.0-0 \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libatspi2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy virtual environment and Playwright browsers from builder
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /root/.cache/ms-playwright /root/.cache/ms-playwright
+
+# Copy application code
+COPY src ./src
+
+# Set environment
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    LOG_LEVEL=INFO
+
+# Metadata
+LABEL org.opencontainers.image.title="Kleinanzeigen MCP Server" \
+      org.opencontainers.image.description="MCP Server for eBay Kleinanzeigen - enables Claude to search and retrieve listings" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.authors="iLux1"
+
+# Run MCP server in STDIO mode via installed script
+ENTRYPOINT ["kleinanzeigen-mcp"]
