@@ -87,10 +87,26 @@ def create_sse_server():
     async def handle_messages(request):
         await sse.handle_post_message(request.scope, request.receive, request._send)
     
+    async def handle_health(request):
+        """Health check endpoint for monitoring and OpenWebUI."""
+        from starlette.responses import JSONResponse
+        return JSONResponse({
+            "status": "ok",
+            "server": "ebay-kleinanzeigen-search",
+            "version": "1.0.0",
+            "transport": "sse",
+            "endpoints": {
+                "health": "/",
+                "sse": "/sse",
+                "messages": "/messages"
+            }
+        })
+    
     # Create Starlette app
     app = Starlette(
         debug=True,
         routes=[
+            Route("/", endpoint=handle_health, methods=["GET"]),
             Route("/sse", endpoint=handle_sse),
             Route("/messages", endpoint=handle_messages, methods=["POST"]),
         ],
