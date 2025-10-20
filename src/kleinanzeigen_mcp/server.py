@@ -98,7 +98,165 @@ def create_sse_server():
             "endpoints": {
                 "health": "/",
                 "sse": "/sse",
-                "messages": "/messages"
+                "messages": "/messages",
+                "openapi": "/openapi.json"
+            }
+        })
+    
+    async def handle_openapi(request):
+        """OpenAPI specification endpoint for tool discovery."""
+        from starlette.responses import JSONResponse
+        return JSONResponse({
+            "openapi": "3.1.0",
+            "info": {
+                "title": "eBay Kleinanzeigen Search MCP Server",
+                "description": "Model Context Protocol server for searching eBay Kleinanzeigen listings",
+                "version": "1.0.0",
+                "contact": {
+                    "name": "MCP Server",
+                    "url": "https://github.com/Sprayer115/ebay-kleinanzeigen-api-mcp"
+                }
+            },
+            "servers": [
+                {
+                    "url": "/",
+                    "description": "MCP SSE Server"
+                }
+            ],
+            "paths": {
+                "/": {
+                    "get": {
+                        "summary": "Health check",
+                        "operationId": "health",
+                        "responses": {
+                            "200": {
+                                "description": "Server status",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "status": {"type": "string"},
+                                                "server": {"type": "string"},
+                                                "version": {"type": "string"}
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "/sse": {
+                    "get": {
+                        "summary": "Server-Sent Events stream",
+                        "operationId": "sse_stream",
+                        "responses": {
+                            "200": {
+                                "description": "SSE stream",
+                                "content": {
+                                    "text/event-stream": {}
+                                }
+                            }
+                        }
+                    }
+                },
+                "/messages": {
+                    "post": {
+                        "summary": "Send MCP messages",
+                        "operationId": "send_message",
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "method": {"type": "string"},
+                                            "params": {"type": "object"}
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "200": {
+                                "description": "Message received"
+                            }
+                        }
+                    }
+                }
+            },
+            "components": {
+                "schemas": {
+                    "SearchListingsRequest": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Suchbegriff für eBay Kleinanzeigen"
+                            },
+                            "location": {
+                                "type": "string",
+                                "description": "Optional: Standort für die Suche (z.B. 'Berlin', 'München')"
+                            },
+                            "category": {
+                                "type": "string",
+                                "description": "Optional: Kategorie (z.B. 'Elektronik', 'Auto')"
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "default": 20,
+                                "description": "Maximale Anzahl der Ergebnisse"
+                            }
+                        },
+                        "required": ["query"]
+                    },
+                    "GetListingDetailsRequest": {
+                        "type": "object",
+                        "properties": {
+                            "listing_url": {
+                                "type": "string",
+                                "description": "URL des Inserats auf eBay Kleinanzeigen"
+                            }
+                        },
+                        "required": ["listing_url"]
+                    }
+                }
+            },
+            "x-mcp": {
+                "protocol_version": "2025-06-18",
+                "transport": "sse",
+                "tools": [
+                    {
+                        "name": "search_listings",
+                        "description": "Suche nach Inseraten auf eBay Kleinanzeigen",
+                        "inputSchema": {
+                            "$ref": "#/components/schemas/SearchListingsRequest"
+                        }
+                    },
+                    {
+                        "name": "get_listing_details",
+                        "description": "Hole detaillierte Informationen zu einem spezifischen Inserat",
+                        "inputSchema": {
+                            "$ref": "#/components/schemas/GetListingDetailsRequest"
+                        }
+                    }
+                ],
+                "prompts": [
+                    {
+                        "name": "find_deals",
+                        "description": "Finde die besten Angebote basierend auf Suchkriterien"
+                    },
+                    {
+                        "name": "compare_listings",
+                        "description": "Vergleiche mehrere ähnliche Inserate"
+                    },
+                    {
+                        "name": "monitor_search",
+                        "description": "Überwache eine Suche auf neue Angebote"
+                    }
+                ]
             }
         })
     
@@ -107,6 +265,7 @@ def create_sse_server():
         debug=True,
         routes=[
             Route("/", endpoint=handle_health, methods=["GET"]),
+            Route("/openapi.json", endpoint=handle_openapi, methods=["GET"]),
             Route("/sse", endpoint=handle_sse),
             Route("/messages", endpoint=handle_messages, methods=["POST"]),
         ],
