@@ -18,7 +18,7 @@ services:
       
       # Server configuration
       HOST: 0.0.0.0
-      PORT: 55122
+      PORT: 8000
       
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -26,7 +26,7 @@ services:
       # Authentication (optional - can be handled by reverse proxy)
       MCP_API_KEY: ${MCP_API_KEY}
     ports:
-      - "${MCP_PORT:-8000}:8000"  # Expose for reverse proxy
+      - "${MCP_PORT:-55122}:8000"  # Expose for reverse proxy
     restart: unless-stopped
     networks:
       - mcp-network
