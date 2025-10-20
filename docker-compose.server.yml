@@ -1,0 +1,134 @@
+# Server-side deployment configuration for SSE transport
+# Use this for centralized MCP server accessible from multiple clients
+
+services:
+  # Reverse proxy with automatic HTTPS
+  traefik:
+    image: traefik:v3.0
+    command:
+      # Enable Docker provider
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      
+      # Entry points
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      
+      # HTTPS/TLS with Let's Encrypt
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      
+      # Redirect HTTP to HTTPS
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      
+      # Dashboard (optional, secure it!)
+      - --api.dashboard=true
+      - --api.insecure=false
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-letsencrypt:/letsencrypt
+    restart: unless-stopped
+    networks:
+      - mcp-network
+
+  # Kleinanzeigen MCP Server (SSE mode)
+  kleinanzeigen-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    environment:
+      # Enable SSE transport mode
+      TRANSPORT_MODE: sse
+      
+      # Server configuration
+      HOST: 0.0.0.0
+      PORT: 8000
+      
+      # Authentication (set in .env.server)
+      API_KEY: ${MCP_API_KEY}
+    labels:
+      # Enable Traefik
+      - traefik.enable=true
+      
+      # HTTP Router
+      - traefik.http.routers.kleinanzeigen-mcp.rule=Host(`${MCP_DOMAIN}`)
+      - traefik.http.routers.kleinanzeigen-mcp.entrypoints=websecure
+      - traefik.http.routers.kleinanzeigen-mcp.tls.certresolver=letsencrypt
+      
+      # Service
+      - traefik.http.services.kleinanzeigen-mcp.loadbalancer.server.port=8000
+      
+      # API Key Authentication Middleware
+      - traefik.http.middlewares.mcp-auth.headers.customrequestheaders.Authorization=Bearer ${MCP_API_KEY}
+      
+      # Rate Limiting (100 requests per minute per IP)
+      - traefik.http.middlewares.mcp-ratelimit.ratelimit.average=100
+      - traefik.http.middlewares.mcp-ratelimit.ratelimit.period=1m
+      
+      # Apply middlewares
+      - traefik.http.routers.kleinanzeigen-mcp.middlewares=mcp-ratelimit@docker
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Monitoring: Prometheus (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    profiles:
+      - monitoring
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    networks:
+      - mcp-network
+
+  # Monitoring: Grafana (optional)
+  grafana:
+    image: grafana/grafana:latest
+    profiles:
+      - monitoring
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_INSTALL_PLUGINS: grafana-clock-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    depends_on:
+      - prometheus
+
+networks:
+  mcp-network:
+    driver: bridge
+
+volumes:
+  traefik-letsencrypt:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local

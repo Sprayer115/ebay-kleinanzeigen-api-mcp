@@ -17,6 +17,8 @@
     ✓ Built for Claude Desktop
     <br />
     ✓ Docker & Local Installation
+    <br />
+    ✓ Server-side Deployment (SSE Transport)
   </p>
 </div>
 
@@ -40,6 +42,7 @@
 **Choose your preferred installation method:**
 
 ### 🐳 Docker (Recommended for Production)
+
 ```powershell
 # With Docker MCP Toolkit (easiest)
 # See: DOCKER_QUICKSTART.md
@@ -48,17 +51,48 @@ docker build -t kleinanzeigen-mcp:latest -f Dockerfile.mcp .
 # Then follow DOCKER_QUICKSTART.md for catalog setup
 ```
 
+### 🌐 Server Deployment (Remote Access via SSE)
+
+For centralized deployment accessible from all your devices:
+
+```bash
+# See detailed guide: SERVER_DEPLOYMENT.md
+
+# Quick start:
+cp .env.server.example .env.server
+# Edit .env.server with your domain and API key
+docker-compose -f docker-compose.server.yml --env-file .env.server up -d
+```
+
+**Client Configuration (Claude Desktop):**
+```json
+{
+  "mcpServers": {
+    "kleinanzeigen": {
+      "url": "https://mcp.yourdomain.com/sse",
+      "transport": "sse",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
 ### 💻 Local Installation (Recommended for Development)
 
 #### 1. Install
+
 ```powershell
 .\setup-uv.ps1
 ```
 
 #### 2. Configure Claude Desktop
+
 Copy the generated config to: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ### 3. Test
+
 Restart Claude Desktop and try: **"Search for laptops in Berlin under 500€"**
 
 See [START_HERE.md](START_HERE.md) for detailed instructions.
@@ -66,14 +100,18 @@ See [START_HERE.md](START_HERE.md) for detailed instructions.
 ## 📦 What is this?
 
 An **MCP (Model Context Protocol) Server** that gives Claude AI direct access to eBay Kleinanzeigen:
+
 - 🔍 Search listings with filters (location, price, keywords)
 - 📄 Get complete listing details (images, seller info, specs)
 - 🤖 Works through natural language in Claude Desktop
+- 🌐 **NEW:** Server-side deployment with SSE transport for multi-device access
 
 ## 🛠️ Available Tools
 
 ### `search_listings`
+
 Search with optional filters:
+
 - `query` - Keywords (e.g., "laptop", "fahrrad")
 - `location` - City or postal code
 - `radius` - Distance in km
@@ -81,7 +119,7 @@ Search with optional filters:
 - `page_count` - Number of pages (1-20)
 
 ### `get_listing_details`
-### `get_listing_details`
+
 Get complete info for a specific listing by ID.
 
 ## 💡 Example Usage
@@ -89,6 +127,7 @@ Get complete info for a specific listing by ID.
 **User:** "Find bicycles in Munich under 300€"
 
 **Claude:** 
+
 1. Calls `search_listings(query="fahrrad", location="München", max_price=300)`
 2. Shows results with IDs, prices, links
 3. Can get details: `get_listing_details(listing_id="...")`
@@ -97,7 +136,11 @@ Get complete info for a specific listing by ID.
 ## 🔧 Development
 
 ```powershell
-# Run server
+# Run server (STDIO mode - local)
+uv run kleinanzeigen-mcp
+
+# Run server (SSE mode - remote)
+$env:TRANSPORT_MODE="sse"
 uv run kleinanzeigen-mcp
 
 # Run tests (unit tests only, fast)
@@ -117,14 +160,20 @@ uv run kleinanzeigen-mcp
 ## 🐳 Docker
 
 ```powershell
+# Local STDIO mode
 docker compose --profile stdio up -d
+
+# Server SSE mode (production)
+docker-compose -f docker-compose.server.yml --env-file .env.server up -d
 ```
 
 ## 📚 Documentation
 
-- **[START_HERE.md](START_HERE.md)** - Quick setup guide
-- **MCP Protocol:** https://modelcontextprotocol.io
-- **Issues:** https://github.com/DanielWTE/ebay-kleinanzeigen-api/issues
+- **[START_HERE.md](START_HERE.md)** - Quick setup guide (local STDIO)
+- **[SERVER_DEPLOYMENT.md](SERVER_DEPLOYMENT.md)** - Server deployment guide (remote SSE)
+- **[DOCKER_QUICKSTART.md](DOCKER_QUICKSTART.md)** - Docker MCP Toolkit setup
+- **MCP Protocol:** <https://modelcontextprotocol.io>
+- **Issues:** <https://github.com/DanielWTE/ebay-kleinanzeigen-api/issues>
 
 ## 🔐 Privacy
 
@@ -134,9 +183,10 @@ docker compose --profile stdio up -d
 
 ---
 
-**Status:** ✅ Ready to use with Claude Desktop
+**Status:** ✅ Ready to use with Claude Desktop (local + remote)
 
 ## License
+
 Distributed under the MIT License. See `LICENSE` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

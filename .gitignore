@@ -67,6 +67,16 @@ log/
 .env.test.local
 .env.production.local
 
+# Server deployment (contains API keys, domain names)
+.env.server
+backups/
+monitoring/
+
+# Docker volumes
+traefik-letsencrypt/
+prometheus-data/
+grafana-data/
+
 # Coverage reports
 htmlcov/
 .tox/

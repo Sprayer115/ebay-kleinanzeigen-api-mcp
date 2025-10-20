@@ -8,6 +8,8 @@ dependencies = [
     "mcp>=1.1.2",
     "playwright>=1.49.0",
     "httpx>=0.28.1",
+    "starlette>=0.45.0",  # For SSE transport
+    "uvicorn>=0.34.0",    # ASGI server for SSE mode
 ]
 
 [project.optional-dependencies]

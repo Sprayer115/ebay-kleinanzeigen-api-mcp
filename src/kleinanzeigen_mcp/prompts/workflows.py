@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 
 def register_prompts(mcp: FastMCP):
-    """Register prompt templates for common workflows."""
+    """Register prompt templates for common workflows (FastMCP mode)."""
     
     @mcp.prompt()
     def find_deals(
@@ -25,7 +25,145 @@ def register_prompts(mcp: FastMCP):
         Returns:
             Prompt template for finding deals
         """
-        return f"""You are helping a user find the best deals for {item_type} on eBay Kleinanzeigen.
+        return _find_deals_impl(item_type, max_budget, location)
+    
+    @mcp.prompt()
+    def compare_listings(
+        listing_ids: str
+    ) -> str:
+        """
+        Compare multiple listings side-by-side to help decision-making.
+        
+        Args:
+            listing_ids: Comma-separated listing IDs to compare (e.g., "123,456,789")
+        
+        Returns:
+            Prompt template for comparison
+        """
+        return _compare_listings_impl(listing_ids)
+    
+    @mcp.prompt()
+    def monitor_search(
+        query: str,
+        location: str = "",
+        max_price: int = 0
+    ) -> str:
+        """
+        Set up a search monitoring strategy for new listings.
+        
+        Args:
+            query: Search keywords
+            location: Optional location filter
+            max_price: Optional maximum price
+        
+        Returns:
+            Prompt template for monitoring setup
+        """
+        return _monitor_search_impl(query, location, max_price)
+    
+    logger.info("Registered prompt templates: find_deals, compare_listings, monitor_search")
+
+
+def register_prompts_manual(server):
+    """Register prompt templates for common workflows (manual mode for SSE)."""
+    from mcp.types import Prompt, PromptArgument, PromptMessage
+    from mcp import types
+    
+    @server.list_prompts()
+    async def list_prompts() -> list[Prompt]:
+        return [
+            Prompt(
+                name="find_deals",
+                description="Help users find the best deals for a specific item type within budget",
+                arguments=[
+                    PromptArgument(
+                        name="item_type",
+                        description="What to search for (e.g., 'laptop', 'bicycle', 'furniture')",
+                        required=True
+                    ),
+                    PromptArgument(
+                        name="max_budget",
+                        description="Maximum price in EUR",
+                        required=True
+                    ),
+                    PromptArgument(
+                        name="location",
+                        description="Location or postal code for local search",
+                        required=False
+                    )
+                ]
+            ),
+            Prompt(
+                name="compare_listings",
+                description="Compare multiple listings side-by-side to help decision-making",
+                arguments=[
+                    PromptArgument(
+                        name="listing_ids",
+                        description="Comma-separated listing IDs to compare (e.g., '123,456,789')",
+                        required=True
+                    )
+                ]
+            ),
+            Prompt(
+                name="monitor_search",
+                description="Set up a search monitoring strategy for new listings",
+                arguments=[
+                    PromptArgument(
+                        name="query",
+                        description="Search keywords",
+                        required=True
+                    ),
+                    PromptArgument(
+                        name="location",
+                        description="Optional location filter",
+                        required=False
+                    ),
+                    PromptArgument(
+                        name="max_price",
+                        description="Optional maximum price",
+                        required=False
+                    )
+                ]
+            )
+        ]
+    
+    @server.get_prompt()
+    async def get_prompt(name: str, arguments: dict) -> types.GetPromptResult:
+        if name == "find_deals":
+            content = _find_deals_impl(
+                item_type=arguments["item_type"],
+                max_budget=int(arguments["max_budget"]),
+                location=arguments.get("location", "Germany")
+            )
+        elif name == "compare_listings":
+            content = _compare_listings_impl(
+                listing_ids=arguments["listing_ids"]
+            )
+        elif name == "monitor_search":
+            content = _monitor_search_impl(
+                query=arguments["query"],
+                location=arguments.get("location", ""),
+                max_price=int(arguments.get("max_price", 0))
+            )
+        else:
+            raise ValueError(f"Unknown prompt: {name}")
+        
+        return types.GetPromptResult(
+            messages=[
+                PromptMessage(
+                    role="user",
+                    content=types.TextContent(type="text", text=content)
+                )
+            ]
+        )
+    
+    logger.info("Registered prompt templates (manual): find_deals, compare_listings, monitor_search")
+
+
+# Shared implementation functions
+def _find_deals_impl(item_type: str, max_budget: int, location: str = "Germany") -> str:
+    """Shared implementation for find_deals prompt."""
+    return f"""You are helping a user find the best deals for {item_type} on eBay Kleinanzeigen.
 
 **User Requirements:**
 - Item: {item_type}
@@ -50,22 +188,12 @@ def register_prompts(mcp: FastMCP):
 - Action steps for the user
 
 Begin your search now."""
-    
-    @mcp.prompt()
-    def compare_listings(
-        listing_ids: str
-    ) -> str:
-        """
-        Compare multiple listings side-by-side to help decision-making.
-        
-        Args:
-            listing_ids: Comma-separated listing IDs to compare (e.g., "123,456,789")
-        
-        Returns:
-            Prompt template for comparison
-        """
-        ids = [id.strip() for id in listing_ids.split(",")]
-        return f"""You are helping a user compare multiple eBay Kleinanzeigen listings.
+
+
+def _compare_listings_impl(listing_ids: str) -> str:
+    """Shared implementation for compare_listings prompt."""
+    ids = [id.strip() for id in listing_ids.split(",")]
+    return f"""You are helping a user compare multiple eBay Kleinanzeigen listings.
 
 **Listings to Compare:**
 {', '.join(ids)}
@@ -91,31 +219,17 @@ Begin your search now."""
 - Questions user should ask sellers
 
 Begin the comparison now."""
-    
-    @mcp.prompt()
-    def monitor_search(
-        query: str,
-        location: str = "",
-        max_price: int = 0
-    ) -> str:
-        """
-        Set up a search monitoring strategy for new listings.
+
+
+def _monitor_search_impl(query: str, location: str = "", max_price: int = 0) -> str:
+    """Shared implementation for monitor_search prompt."""
+    filters = f"query: {query}"
+    if location:
+        filters += f", location: {location}"
+    if max_price > 0:
+        filters += f", max price: {max_price}€"
         
-        Args:
-            query: Search keywords
-            location: Optional location filter
-            max_price: Optional maximum price
-        
-        Returns:
-            Prompt template for monitoring setup
-        """
-        filters = f"query: {query}"
-        if location:
-            filters += f", location: {location}"
-        if max_price > 0:
-            filters += f", max price: {max_price}€"
-            
-        return f"""You are helping a user monitor new listings on eBay Kleinanzeigen.
+    return f"""You are helping a user monitor new listings on eBay Kleinanzeigen.
 
 **Search Parameters:**
 {filters}
@@ -140,5 +254,3 @@ Begin the comparison now."""
 - Quick evaluation checklist
 
 Begin the analysis now."""
-    
-    logger.info("Registered prompt templates: find_deals, compare_listings, monitor_search")
