@@ -55,16 +55,23 @@ docker build -t kleinanzeigen-mcp:latest -f Dockerfile.mcp .
 
 For centralized deployment accessible from all your devices:
 
+**Prerequisites:** Reverse proxy already configured (Nginx Proxy Manager, Traefik, Caddy, etc.)
+
 ```bash
 # See detailed guide: SERVER_DEPLOYMENT.md
 
 # Quick start:
 cp .env.server.example .env.server
-# Edit .env.server with your domain and API key
+# Edit .env.server with your API key
 docker-compose -f docker-compose.server.yml --env-file .env.server up -d
+
+# Configure your reverse proxy (Nginx, Traefik, etc.) to forward:
+# Domain: mcp.yourdomain.com → http://localhost:8000
+# ✓ Enable Websockets Support!
 ```
 
 **Client Configuration (Claude Desktop):**
+
 ```json
 {
   "mcpServers": {
@@ -78,6 +85,13 @@ docker-compose -f docker-compose.server.yml --env-file .env.server up -d
   }
 }
 ```
+
+**Supports:**
+
+- Nginx Proxy Manager (recommended for beginners)
+- Traefik, Caddy, Apache
+- Cloudflare Tunnel (no port forwarding needed)
+- Any reverse proxy with WebSocket support
 
 ### 💻 Local Installation (Recommended for Development)
 
