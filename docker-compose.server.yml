@@ -18,7 +18,7 @@ services:
       
       # Server configuration
       HOST: 0.0.0.0
-      PORT: 8000
+      PORT: 55122
       
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -46,51 +46,6 @@ services:
       retries: 3
       start_period: 40s
 
-  # Optional: Monitoring with Prometheus
-  prometheus:
-    image: prom/prometheus:latest
-    profiles:
-      - monitoring
-    container_name: mcp-prometheus
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=15d'
-    ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
-    restart: unless-stopped
-    networks:
-      - mcp-network
-
-  # Optional: Monitoring with Grafana
-  grafana:
-    image: grafana/grafana:latest
-    profiles:
-      - monitoring
-    container_name: mcp-grafana
-    environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
-      GF_INSTALL_PLUGINS: grafana-clock-panel
-      GF_SERVER_ROOT_URL: ${GRAFANA_URL:-http://localhost:3000}
-    volumes:
-      - grafana-data:/var/lib/grafana
-    ports:
-      - "${GRAFANA_PORT:-3000}:3000"
-    restart: unless-stopped
-    networks:
-      - mcp-network
-    depends_on:
-      - prometheus
-
 networks:
   mcp-network:
     driver: bridge
-
-volumes:
-  prometheus-data:
-    driver: local
-  grafana-data:
-    driver: local
