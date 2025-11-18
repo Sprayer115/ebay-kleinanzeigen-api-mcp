@@ -120,7 +120,11 @@ class KleinanzeigenClient:
                 logger.info(f"Fetching page {page_num}: {current_url}")
                 
                 await page.goto(current_url, timeout=30000, wait_until="domcontentloaded")
-                await page.wait_for_load_state("networkidle")
+                # Wait for either the listing container or "no results" message
+                try:
+                    await page.wait_for_selector(".ad-listitem, .l-splitpage--no-results", timeout=10000)
+                except Exception as e:
+                    logger.warning(f"Selector wait failed: {e}, continuing anyway")
                 
                 page_results = await self._extract_listings_from_page(page)
                 results.extend(page_results)
