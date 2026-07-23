@@ -149,17 +149,27 @@ def create_sse_server():
     
     # Create SSE transport
     sse = SseServerTransport("/messages")
-    
-    async def handle_sse(request):
-        async with sse.connect_sse(
-            request.scope, request.receive, request._send
-        ) as streams:
-            await server.run(
-                streams[0], streams[1], server.create_initialization_options()
-            )
-    
-    async def handle_messages(request):
-        await sse.handle_post_message(request.scope, request.receive, request._send)
+
+    # NOTE: endpoints are raw ASGI classes, not request-functions. Starlette
+    # wraps function endpoints with request_response(), which does
+    # `await response(scope, receive, send)` on the return value. Both
+    # handlers below take over the ASGI channel themselves and return None,
+    # so every request ended with `TypeError: 'NoneType' object is not
+    # callable` in the logs. Class endpoints are used directly as ASGI apps.
+    class SSEApp:
+        """Long-lived SSE stream: one per connected MCP client."""
+
+        async def __call__(self, scope, receive, send):
+            async with sse.connect_sse(scope, receive, send) as streams:
+                await server.run(
+                    streams[0], streams[1], server.create_initialization_options()
+                )
+
+    class MessagesApp:
+        """Accepts JSON-RPC messages POSTed by the client (sends 202 itself)."""
+
+        async def __call__(self, scope, receive, send):
+            await sse.handle_post_message(scope, receive, send)
     
     async def handle_health(request):
         """Health check endpoint for monitoring and OpenWebUI."""
@@ -340,8 +350,8 @@ def create_sse_server():
         routes=[
             Route("/", endpoint=handle_health, methods=["GET"]),
             Route("/openapi.json", endpoint=handle_openapi, methods=["GET"]),
-            Route("/sse", endpoint=handle_sse),
-            Route("/messages", endpoint=handle_messages, methods=["POST"]),
+            Route("/sse", endpoint=SSEApp(), methods=["GET"]),
+            Route("/messages", endpoint=MessagesApp(), methods=["POST"]),
         ],
     )
 
