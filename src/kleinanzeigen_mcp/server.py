@@ -8,10 +8,12 @@ Supports two transport modes:
 - STDIO: For local clients (Claude Desktop, MCP Toolkit)
 - SSE: For remote server deployment with HTTP/SSE
 """
+import hmac
 import logging
 import sys
 import os
 from typing import Literal
+from urllib.parse import parse_qs
 
 # Configure logging to stderr only (CRITICAL for STDIO mode)
 logging.basicConfig(
@@ -20,6 +22,78 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stderr)]  # stderr only!
 )
 logger = logging.getLogger(__name__)
+
+
+class ApiKeyAuthMiddleware:
+    """Pure ASGI middleware enforcing MCP_API_KEY on protected paths.
+
+    Accepts the key via (in order):
+    - ``Authorization: Bearer <key>`` header
+    - ``X-API-Key: <key>`` header
+    - ``?api_key=<key>`` query parameter (fallback for SSE clients that
+      cannot set custom headers, e.g. browser EventSource)
+
+    Public paths (health/info) stay unauthenticated. If MCP_API_KEY is not
+    set, the middleware is never installed (see create_sse_server).
+    """
+
+    def __init__(self, app, api_key: str, protected_paths=("/sse", "/messages", "/openapi.json")):
+        self.app = app
+        self.api_key = api_key
+        self.protected_paths = protected_paths
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        if not any(path == p or path.startswith(p + "/") for p in self.protected_paths):
+            await self.app(scope, receive, send)
+            return
+
+        # HEAD requests carry no response body by definition, so nothing
+        # sensitive is exposed — let them through unauthenticated.
+        # Rationale: MCP clients like LibreChat probe servers with an
+        # unauthenticated HEAD to detect OAuth requirements; a 401 here makes
+        # them misclassify the server as "OAuth required" and never attempt
+        # the real (API-key-authenticated) connection.
+        if scope.get("method") == "HEAD":
+            await self.app(scope, receive, send)
+            return
+
+        headers = {
+            k.decode("latin-1").lower(): v.decode("latin-1")
+            for k, v in scope.get("headers", [])
+        }
+        provided = None
+        auth = headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            provided = auth[7:].strip()
+        elif headers.get("x-api-key"):
+            provided = headers["x-api-key"].strip()
+        else:
+            qs = parse_qs(scope.get("query_string", b"").decode("latin-1"))
+            provided = qs.get("api_key", [None])[0]
+
+        if provided and hmac.compare_digest(provided, self.api_key):
+            await self.app(scope, receive, send)
+            return
+
+        body = b'{"error":"unauthorized","detail":"Valid API key required (Authorization: Bearer <key> or X-API-Key header)"}'
+        # NOTE: deliberately NO `WWW-Authenticate` header on the 401.
+        # MCP clients (LibreChat) probe unauthenticated and interpret a Bearer
+        # challenge as "OAuth 2.0 required", then never use their statically
+        # configured API-key headers. A bare 401 avoids that misclassification.
+        await send({
+            "type": "http.response.start",
+            "status": 401,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
 
 
 def get_transport_mode() -> Literal["stdio", "sse"]:
@@ -270,6 +344,18 @@ def create_sse_server():
             Route("/messages", endpoint=handle_messages, methods=["POST"]),
         ],
     )
+
+    # Enforce API key authentication on functional endpoints if configured.
+    # Health endpoint (/) stays public for monitoring/healthchecks.
+    api_key = os.environ.get("MCP_API_KEY", "").strip()
+    if api_key:
+        app = ApiKeyAuthMiddleware(app, api_key)
+        logger.info("API key authentication ENABLED for /sse, /messages, /openapi.json")
+    else:
+        logger.warning(
+            "MCP_API_KEY is not set - server is running WITHOUT authentication! "
+            "Set MCP_API_KEY to protect /sse and /messages."
+        )
     
     # Get configuration from environment
     host = os.environ.get("HOST", "0.0.0.0")

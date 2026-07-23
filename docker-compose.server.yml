@@ -23,7 +23,7 @@ services:
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       
-      # Authentication (optional - can be handled by reverse proxy)
+      # Authentication (enforced by the app on /sse, /messages and /openapi.json)
       MCP_API_KEY: ${MCP_API_KEY}
     ports:
       - "${MCP_PORT:-55122}:8000"  # Expose for reverse proxy
@@ -40,7 +40,7 @@ services:
           cpus: '0.5'
           memory: 512M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/sse"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
       timeout: 10s
       retries: 3
