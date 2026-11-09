@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
     curl \
+    libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install UV (10-100x faster than pip/poetry)
@@ -52,6 +53,7 @@ RUN apt-get update && apt-get install -y \
     libcairo2 \
     libasound2 \
     libatspi2.0-0 \
+    libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment and Playwright browsers from builder
