@@ -93,9 +93,11 @@ class KleinanzeigenClient:
         if min_price is not None or max_price is not None:
             min_price_str = str(min_price) if min_price is not None else ""
             max_price_str = str(max_price) if max_price is not None else ""
-            price_path = f"/preis:{min_price_str}:{max_price_str}"
+            # Kleinanzeigen expects the price filter as "/s-preis:MIN:MAX/seite:N";
+            # the former "/preis:MIN:MAX/s-seite:N" now returns an empty page.
+            price_path = f"/s-preis:{min_price_str}:{max_price_str}"
         
-        search_path = f"{price_path}/s-seite:{{page}}"
+        search_path = f"{price_path}/seite:{{page}}" if price_path else "/s-seite:{page}"
         
         # Build query parameters
         params = {}
@@ -122,7 +124,9 @@ class KleinanzeigenClient:
                 await page.goto(current_url, timeout=30000, wait_until="domcontentloaded")
                 # Wait for either the listing container or "no results" message
                 try:
-                    await page.wait_for_selector(".ad-listitem, .l-splitpage--no-results", timeout=10000)
+                    await page.wait_for_selector(
+                        "article[data-adid], .ad-listitem, .l-splitpage--no-results", timeout=10000
+                    )
                 except Exception as e:
                     logger.warning(f"Selector wait failed: {e}, continuing anyway")
                 
@@ -144,43 +148,54 @@ class KleinanzeigenClient:
             await context.close()
     
     async def _extract_listings_from_page(self, page: Page) -> List[ListingSummary]:
-        """Extract listing data from a search results page."""
+        """Extract listing data from a search results page.
+
+        Supports the current result markup (``article[data-adid]`` with ``h3 a`` title and
+        ``p.text-title3`` price, since 2026) as well as the legacy ``.ad-listitem`` markup.
+        """
         try:
-            items = await page.query_selector_all(".ad-listitem:not(.is-topad):not(.badge-hint-pro-small-srp)")
+            articles = await page.query_selector_all("article[data-adid]")
             results = []
+            seen_ids = set()
             
-            for item in items:
-                article = await item.query_selector("article")
-                if not article:
+            for article in articles:
+                # Legacy markup: skip top ads / pro badges
+                legacy_skip = await article.evaluate(
+                    "a => !!a.closest('.is-topad, .badge-hint-pro-small-srp')"
+                )
+                if legacy_skip:
                     continue
                 
                 data_adid = await article.get_attribute("data-adid")
                 data_href = await article.get_attribute("data-href")
+                if not data_adid or not data_href or data_adid in seen_ids:
+                    continue
+                seen_ids.add(data_adid)
                 
-                # Extract title
-                title_element = await article.query_selector("h2.text-module-begin a.ellipsis")
-                title_text = await title_element.inner_text() if title_element else ""
+                # Extract title (current: h3 > a, legacy: h2.text-module-begin a.ellipsis)
+                title_element = await article.query_selector("h3 a, h2.text-module-begin a.ellipsis, h2 a")
+                title_text = (await title_element.inner_text()).strip() if title_element else ""
                 
-                # Extract price
-                price_element = await article.query_selector("p.aditem-main--middle--price-shipping--price")
+                # Extract price (current: p.text-title3, legacy: p.aditem-main--middle--price-shipping--price)
+                price_element = await article.query_selector(
+                    "p.text-title3, p.aditem-main--middle--price-shipping--price"
+                )
                 price_text = ""
                 if price_element:
                     price_text = await price_element.inner_text()
                     price_text = price_text.replace("€", "").replace("VB", "").replace(".", "").strip()
                 
-                # Extract description
-                desc_element = await article.query_selector("p.aditem-main--middle--description")
-                description_text = await desc_element.inner_text() if desc_element else ""
+                # Extract description (current: paragraph following the title heading)
+                desc_element = await article.query_selector("p.aditem-main--middle--description, h3 + p")
+                description_text = (await desc_element.inner_text()).strip() if desc_element else ""
                 
-                if data_adid and data_href:
-                    full_url = f"{self.base_url}{data_href}"
-                    results.append(ListingSummary(
-                        adid=data_adid,
-                        url=full_url,
-                        title=title_text,
-                        price=price_text,
-                        description=description_text
-                    ))
+                results.append(ListingSummary(
+                    adid=data_adid,
+                    url=f"{self.base_url}{data_href}",
+                    title=title_text,
+                    price=price_text,
+                    description=description_text
+                ))
             
             return results
             
